@@ -2,8 +2,6 @@ import csv
 from pathlib import Path
 import shutil
 
-
-
 def read_csv(file_path):
     rows = []
 
