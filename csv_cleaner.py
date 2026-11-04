@@ -2,11 +2,18 @@ import csv
 from pathlib import Path
 import shutil
 
+def get_file_path(file_path):
+    path = Path(file_path)
+
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+
+    return path
+
 def read_csv(file_path):
     rows = []
 
-    base_dir = Path(__file__).resolve().parent
-    csv_file = base_dir / file_path
+    csv_file = get_file_path(file_path)
 
     try:
         with open(csv_file, "r", encoding="utf-8", newline="") as file:
@@ -15,15 +22,15 @@ def read_csv(file_path):
 
     except FileNotFoundError:
         print(f"Файл {file_path} не найден.")
-        return []
+        return None
 
     except PermissionError:
         print(f"Нет доступа к файлу {file_path}.")
-        return []
+        return None
 
     except UnicodeDecodeError:
         print(f"Не удалось прочитать {file_path}: проверьте кодировку файла.")
-        return []
+        return None
 
     return rows
 
@@ -39,8 +46,11 @@ def remove_empty_rows(rows):
 
 def remove_duplicates(rows):
     excl_rows = []
+    seen = set()
     for row in rows:
-        if row not in excl_rows:
+        row_tuple = tuple(row)
+        if row_tuple not in seen:
+            seen.add(row_tuple)
             excl_rows.append(row)
     return excl_rows
 
@@ -81,9 +91,10 @@ def validate_rows(rows):
     return validated_rows, invalid_rows
 
 def backup_csv(file_path):
-    base_dir = Path(__file__).resolve().parent
-    csv_file = base_dir / file_path
-    backup_file = base_dir / "data_backup.csv"
+    csv_file = get_file_path(file_path)
+    backup_file = csv_file.with_name(
+    f"{csv_file.stem}_backup{csv_file.suffix}"
+)
 
     try:
         shutil.copy2(csv_file, backup_file)
@@ -107,8 +118,7 @@ def backup_csv(file_path):
     return backup_file
 
 def save_csv(rows, file_path):
-    base_dir = Path(__file__).resolve().parent
-    csv_file = base_dir / file_path
+    csv_file = get_file_path(file_path)
     temp_file = csv_file.with_suffix(".tmp")
     saved = False
     try:
@@ -136,54 +146,64 @@ def save_csv(rows, file_path):
         return False
     finally:
         if not saved and temp_file.exists():
-            temp_file.unlink()
+            try:
+                temp_file.unlink()
+            except OSError:
+                pass
 
-data = read_csv("data.csv")
+def main():   
+    data = read_csv("data.csv")
 
-if not data:
-    print("Файл пустой или не удалось его прочитать.")
-    exit()
+    if data is None:
+        print("Не удалось прочитать файл. Работа программы остановлена.")
+        return
 
-header = data[0]
-rows = data[1:]
+    if not data:
+        print("Файл пустой.")
+        return
 
-if not rows:
-    print("В CSV нет записей для обработки.")
-    exit()
+    header = data[0]
+    rows = data[1:]
 
-cleaned_data = remove_empty_rows(rows)
-excl_data = remove_duplicates(cleaned_data)
-valid_data, invalid_data = validate_rows(excl_data)
-while True:   
-    answer = input("Удалить некорректные строки? (да/нет): ").strip().lower()
-    if answer in ["да", "нет"]:
-        break
+    if not rows:
+        print("В CSV нет записей для обработки.")
+        return
+
+    cleaned_data = remove_empty_rows(rows)
+    excl_data = remove_duplicates(cleaned_data)
+    valid_data, invalid_data = validate_rows(excl_data)
+    while True:   
+        answer = input("Удалить некорректные строки? (да/нет): ").strip().lower()
+        if answer in ["да", "нет"]:
+            break
+        else:
+            print("Пожалуйста, введите 'да' или 'нет'.")
+
+    if answer.lower() == "да":
+        final_data = valid_data
     else:
-        print("Пожалуйста, введите 'да' или 'нет'.")
+        final_data = valid_data + invalid_data
 
-if answer.lower() == "да":
-    final_data = valid_data
-else:
-    final_data = valid_data + invalid_data
-
-print("Итоговые данные:")
-for row in final_data:
-    print(row)
-
-if invalid_data:
-    print("\nНайдены некорректные строки:")
-    for row in invalid_data:
+    print("Итоговые данные:")
+    for row in final_data:
         print(row)
 
-result = backup_csv("data.csv")
-if result is None:
-    print("Не удалось создать резервную копию. Работа программы остановлена.")
-    exit()
-print(f"Резервная копия создана: {result}")
+    if invalid_data:
+        print("\nНайдены некорректные строки:")
+        for row in invalid_data:
+            print(row)
 
-saved = save_csv([header] + final_data, "cleaned_data.csv")
-if not saved:
-    print("Не удалось сохранить файл. Работа программы остановлена.")
-    exit()
-print("Файл успешно сохранён!")
+    result = backup_csv("data.csv")
+    if result is None:
+        print("Не удалось создать резервную копию. Работа программы остановлена.")
+        return
+    print(f"Резервная копия создана: {result}")
 
+    saved = save_csv([header] + final_data, "cleaned_data.csv")
+    if not saved:
+        print("Не удалось сохранить файл. Работа программы остановлена.")
+        return
+    print("Файл успешно сохранён!")
+
+if __name__ == "__main__":
+    main()

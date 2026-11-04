@@ -1,0 +1,16 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+venv/
+
+# Test and working data
+data.csv
+data_backup.csv
+cleaned_data.csv
+
+# IDE
+.vscode/
+.idea/
